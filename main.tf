@@ -12,24 +12,25 @@ variable "region" {
   type = string
 }
 
-resource "aws_lb" "load_balancer"{
+resource "aws_lb" "load_balancer" {
   load_balancer_type = "network"
-  subnets = [aws_subnet.public]
+  subnets            = [aws_subnet.public.id]
+  security_groups = [aws_security_group.public_sg.id]
 }
 
-resource "aws_lb_target_group" "traffic_forwarder"{
-  port = 443
-  protocol = "TCP"
-  vpc_id = aws_vpc.vpc.id
+resource "aws_lb_target_group" "traffic_forwarder" {
+  port        = 8000
+  protocol    = "TCP"
+  vpc_id      = aws_vpc.vpc.id
   target_type = "ip"
 }
 
-resource "aws_lb_listener" "traffic_listener"{
+resource "aws_lb_listener" "traffic_listener" {
   load_balancer_arn = aws_lb.load_balancer.arn
-  port = 443
-  protocol = "TCP"
+  port              = 443
+  protocol          = "TCP"
   default_action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.traffic_forwarder.arn
   }
 
@@ -54,19 +55,21 @@ resource "aws_ecs_service" "inventree" {
   cluster         = aws_ecs_cluster.cluster.id
   task_definition = aws_ecs_task_definition.ecs_task.arn
   network_configuration {
-    subnets = [aws_subnet.default_deploy]
+    subnets          = [aws_subnet.default_deploy.id]
     assign_public_ip = false
-    security_groups = []
+    security_groups  = [aws_security_group.private_sg.id]
   }
 
   load_balancer {
     container_name = "caddy_server"
-    container_port = 443
+    container_port = 8000
   }
+
+  desired_count = 1
 }
 
 resource "aws_efs_file_system" "inventree_files" {
-  availability_zone_name = var.region
+  availability_zone_name = "us-west-2a"
   creation_token         = "inventree_files"
 }
 
@@ -74,7 +77,7 @@ resource "aws_efs_file_system" "inventree_files" {
 resource "aws_ecs_task_definition" "ecs_task" {
   family                   = "service"
   network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE", "EC2"]
+  requires_compatibilities = ["FARGATE"]
   cpu                      = 512
   memory                   = 2048
   volume {
@@ -92,7 +95,7 @@ resource "aws_ecs_task_definition" "ecs_task" {
     }
   }
 
-  volume{
+  volume {
     name = "inventree_caddy_log"
     efs_volume_configuration {
       file_system_id = aws_efs_file_system.inventree_files.id
@@ -100,7 +103,7 @@ resource "aws_ecs_task_definition" "ecs_task" {
     }
   }
 
-  volume{
+  volume {
     name = "inventree_caddy_media"
     efs_volume_configuration {
       file_system_id = aws_efs_file_system.inventree_files.id
@@ -108,7 +111,7 @@ resource "aws_ecs_task_definition" "ecs_task" {
     }
   }
 
-  volume{
+  volume {
     name = "inventree_caddy_config"
     efs_volume_configuration {
       file_system_id = aws_efs_file_system.inventree_files.id
@@ -116,7 +119,7 @@ resource "aws_ecs_task_definition" "ecs_task" {
     }
   }
 
-  volume{
+  volume {
     name = "inventree_caddy_data"
     efs_volume_configuration {
       file_system_id = aws_efs_file_system.inventree_files.id
@@ -143,7 +146,7 @@ resource "aws_ecs_task_definition" "ecs_task" {
     },
     {
      "name"                 : "inventree-server",
-      "image"                : "inventree/inventree:STABLE",
+      "image"                : "caddy:alpine",
       "cpu"                  : 512,
       "memory"               : 2048,
       "essential"            : true,
