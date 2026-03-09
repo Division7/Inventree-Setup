@@ -12,6 +12,29 @@ variable "region" {
   type = string
 }
 
+resource "aws_lb" "load_balancer"{
+  load_balancer_type = "network"
+  subnets = [aws_subnet.public]
+}
+
+resource "aws_lb_target_group" "traffic_forwarder"{
+  port = 443
+  protocol = "TCP"
+  vpc_id = aws_vpc.vpc.id
+  target_type = "ip"
+}
+
+resource "aws_lb_listener" "traffic_listener"{
+  load_balancer_arn = aws_lb.load_balancer.arn
+  port = 443
+  protocol = "TCP"
+  default_action {
+    type = "forward"
+    target_group_arn = aws_lb_target_group.traffic_forwarder.arn
+  }
+
+}
+
 resource "aws_ecs_cluster" "cluster" {
   name = "inventree_cluster"
 }
@@ -30,6 +53,16 @@ resource "aws_ecs_service" "inventree" {
   name            = "inventree-service"
   cluster         = aws_ecs_cluster.cluster.id
   task_definition = aws_ecs_task_definition.ecs_task.arn
+  network_configuration {
+    subnets = [aws_subnet.default_deploy]
+    assign_public_ip = false
+    security_groups = []
+  }
+
+  load_balancer {
+    container_name = "caddy_server"
+    container_port = 443
+  }
 }
 
 resource "aws_efs_file_system" "inventree_files" {
@@ -59,11 +92,35 @@ resource "aws_ecs_task_definition" "ecs_task" {
     }
   }
 
-  volume {
-    name = "inventree_caddy"
+  volume{
+    name = "inventree_caddy_log"
     efs_volume_configuration {
       file_system_id = aws_efs_file_system.inventree_files.id
-      root_directory = "/caddy"
+      root_directory = "/caddy/log"
+    }
+  }
+
+  volume{
+    name = "inventree_caddy_media"
+    efs_volume_configuration {
+      file_system_id = aws_efs_file_system.inventree_files.id
+      root_directory = "/caddy/media"
+    }
+  }
+
+  volume{
+    name = "inventree_caddy_config"
+    efs_volume_configuration {
+      file_system_id = aws_efs_file_system.inventree_files.id
+      root_directory = "/caddy/config"
+    }
+  }
+
+  volume{
+    name = "inventree_caddy_data"
+    efs_volume_configuration {
+      file_system_id = aws_efs_file_system.inventree_files.id
+      root_directory = "/caddy/data"
     }
   }
 
@@ -127,14 +184,33 @@ resource "aws_ecs_task_definition" "ecs_task" {
       "essential"            : true,
       "portMappings" : [
         {
-          "containerPort"    : 5342,
-          "hostPort"         : 5342
+          "containerPort"    : 80,
+          "hostPort"         : 80
+        },
+        {
+          "containerPort"    : 443,
+          "hostPort"         : 443
         }
       ],
       "mountPoints": [
         {
-          "sourceVolume": "inventree_server",
-          "containerPath": "/home/inventree/data",
+          "sourceVolume": "inventree_caddy_media",
+          "containerPath": "/var/www",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "inventree_caddy_log",
+          "containerPath": "/var/log",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "inventree_caddy_data",
+          "containerPath": "/data",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "inventree_caddy_config",
+          "containerPath": "/config",
           "readOnly": false
         }
       ]
