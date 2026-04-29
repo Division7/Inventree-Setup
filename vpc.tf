@@ -45,8 +45,8 @@ resource "aws_security_group" "private_sg" {
 resource "aws_vpc_security_group_ingress_rule" "allow_public_to_private" {
   security_group_id            = aws_security_group.private_sg.id
   referenced_security_group_id = aws_security_group.public_sg.id
-  from_port                    = 8000
-  to_port                      = 8000
+  from_port                    = 443
+  to_port                      = 443
   ip_protocol                  = "tcp"
   description                  = "Allow HTTP from public subnet resources"
 }

@@ -19,7 +19,7 @@ resource "aws_lb" "load_balancer" {
 }
 
 resource "aws_lb_target_group" "traffic_forwarder" {
-  port        = 8000
+  port        = 443
   protocol    = "TCP"
   vpc_id      = aws_vpc.vpc.id
   target_type = "ip"
@@ -62,7 +62,8 @@ resource "aws_ecs_service" "inventree" {
 
   load_balancer {
     container_name = "caddy_server"
-    container_port = 8000
+    container_port = 443
+    target_group_arn = aws_lb_target_group.traffic_forwarder.arn
   }
 
   desired_count = 1
@@ -146,7 +147,7 @@ resource "aws_ecs_task_definition" "ecs_task" {
     },
     {
      "name"                 : "inventree-server",
-      "image"                : "caddy:alpine",
+      "image"                : "inventree/inventree:STABLE",
       "cpu"                  : 512,
       "memory"               : 2048,
       "essential"            : true,
@@ -181,7 +182,7 @@ resource "aws_ecs_task_definition" "ecs_task" {
     },
     {
      "name"                 : "caddy_server",
-      "image"                : "inventree/inventree:STABLE",
+      "image"                : "caddy:alpine",
       "cpu"                  : 512,
       "memory"               : 2048,
       "essential"            : true,
